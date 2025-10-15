@@ -1,16 +1,18 @@
 // Vercel API handler - catch-all route
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase clients
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
-
-const adminSupabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+function getSupabaseClients() {
+  const url = process.env.SUPABASE_URL;
+  const anon = process.env.SUPABASE_ANON_KEY;
+  const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url) throw new Error('Missing env SUPABASE_URL');
+  if (!anon) throw new Error('Missing env SUPABASE_ANON_KEY');
+  if (!service) throw new Error('Missing env SUPABASE_SERVICE_ROLE_KEY');
+  return {
+    supabase: createClient(url, anon),
+    adminSupabase: createClient(url, service)
+  };
+}
 
 // File-level runtime config removed; runtime is configured in vercel.json
 
@@ -46,6 +48,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    const { supabase, adminSupabase } = getSupabaseClients();
     // Root: serve minimal Dashboard viewer
     if (method === 'GET' && (url === '/' || url === '/api')) {
       // Find default organization (prefer "Demo City", fallback to first)
