@@ -11,8 +11,12 @@ install: ## Install all dependencies
 	@echo "📦 Installing Node.js dependencies..."
 	npm install
 	@echo "📦 Installing Python dependencies for dashboard..."
-	cd dashboard && pip install -r requirements.txt
-	@echo "✅ Dependencies installed!"
+	@command -v python3 >/dev/null 2>&1 || { echo >&2 "Python 3 is required but not installed. Please install Python 3."; exit 1; }
+	@echo "Creating Python virtual environment..."
+	cd dashboard && python3 -m venv venv || true
+	@echo "Installing Python packages in virtual environment..."
+	cd dashboard && source venv/bin/activate && pip install -r requirements.txt || echo "⚠️  Python packages installation skipped. Run 'make setup-python' manually if needed."
+	@echo "✅ Node.js dependencies installed!"
 
 setup: install ## Full setup: install deps, setup database, seed data
 	@echo "🔧 Setting up CivicSense..."
@@ -33,20 +37,37 @@ dev: ## Start development servers (API + Dashboard)
 	@echo "🚀 Starting development environment..."
 	@echo "Starting API server on port 3000..."
 	npm run dev &
-	@echo "Starting Streamlit dashboard on port 8501..."
-	cd dashboard && streamlit run app.py --server.port 8501 &
-	@echo "✅ Development servers started!"
-	@echo "📊 Dashboard: http://localhost:8501"
-	@echo "🔗 API: http://localhost:3000"
+	@if [ -f dashboard/venv/bin/activate ]; then \
+		echo "Starting Streamlit dashboard on port 8501..."; \
+		cd dashboard && source venv/bin/activate && streamlit run app.py --server.port 8501 & \
+		echo "✅ Development servers started!"; \
+		echo "📊 Dashboard: http://localhost:8501"; \
+		echo "🔗 API: http://localhost:3000"; \
+	else \
+		echo "⚠️  Dashboard not started. Run 'make setup-python' first for dashboard support."; \
+		echo "🔗 API: http://localhost:3000"; \
+	fi
 	@echo "Press Ctrl+C to stop all servers"
 
 api-dev: ## Start only the API server
 	@echo "🚀 Starting API server..."
 	npm run dev
 
+setup-python: ## Setup Python virtual environment for dashboard
+	@echo "🐍 Setting up Python environment for dashboard..."
+	cd dashboard && python3 -m venv venv
+	cd dashboard && source venv/bin/activate && pip install -r requirements.txt
+	@echo "✅ Python environment ready!"
+	@echo "To use: cd dashboard && source venv/bin/activate"
+
 dashboard-dev: ## Start only the dashboard
 	@echo "📊 Starting Streamlit dashboard..."
-	cd dashboard && streamlit run app.py
+	@if [ -f dashboard/venv/bin/activate ]; then \
+		cd dashboard && source venv/bin/activate && streamlit run app.py; \
+	else \
+		echo "⚠️  Python virtual environment not found. Run 'make setup-python' first."; \
+		echo "Or install manually: cd dashboard && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt"; \
+	fi
 
 test: ## Run test workflow
 	@echo "🧪 Running workflow tests..."
