@@ -8,10 +8,16 @@ import { createClient } from '@supabase/supabase-js';
 // Load environment variables
 dotenv.config({ path: '.env.local' });
 
-// Initialize Supabase client
+// Initialize Supabase clients
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_ANON_KEY
+);
+
+// Admin client for backend operations (bypasses RLS)
+const adminSupabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 const app = express();
@@ -74,7 +80,7 @@ app.get('/dashboard/:orgId', async (req, res) => {
     const { orgId } = req.params;
 
     // Get organization info
-    const { data: org, error: orgError } = await supabase
+    const { data: org, error: orgError } = await adminSupabase
       .from('organizations')
       .select('*')
       .eq('id', orgId)
@@ -88,12 +94,12 @@ app.get('/dashboard/:orgId', async (req, res) => {
     }
 
     // Get ticket metrics
-    const { data: tickets, error: ticketsError } = await supabase
+    const { data: tickets, error: ticketsError } = await adminSupabase
       .from('tickets')
       .select('*')
       .eq('org_id', orgId);
 
-    const { data: reports, error: reportsError } = await supabase
+    const { data: reports, error: reportsError } = await adminSupabase
       .from('reports')
       .select('*')
       .in('ticket_id', tickets?.map(t => t.id) || []);
@@ -145,7 +151,7 @@ app.get('/dashboard/:orgId', async (req, res) => {
 // List organizations endpoint
 app.get('/organizations', async (req, res) => {
   try {
-    const { data: organizations, error } = await supabase
+    const { data: organizations, error } = await adminSupabase
       .from('organizations')
       .select('*')
       .order('created_at', { ascending: false });
