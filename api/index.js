@@ -1,7 +1,7 @@
-// Vercel serverless function entry point
-// This wraps our working simple-server.js for Vercel deployment
-
+// Vercel API route handler
 import app from '../src/simple-server.js';
 
-// Export the Express app for Vercel
-export default app;
+// Vercel expects a request handler function
+export default async function handler(req, res) {
+  return app(req, res);
+}

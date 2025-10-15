@@ -1,16 +1,8 @@
 {
-  "functions": {
-    "api/index.js": {
-      "runtime": "vercel-node@18.x"
-    }
-  },
   "rewrites": [
     {
       "source": "/(.*)",
-      "destination": "/api/index.js"
+      "destination": "/api"
     }
-  ],
-  "env": {
-    "NODE_ENV": "production"
-  }
+  ]
 }

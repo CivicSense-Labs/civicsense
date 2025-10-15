@@ -6,7 +6,9 @@ import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 
 // Load environment variables
-dotenv.config({ path: '.env.local' });
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config({ path: '.env.local' });
+}
 
 // Initialize Supabase clients
 const supabase = createClient(
@@ -296,13 +298,15 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server
-app.listen(port, () => {
-  console.log(`🚀 CivicSense API server running on port ${port}`);
-  console.log(`📊 Health check: http://localhost:${port}/health`);
-  console.log(`📱 SMS webhook: POST http://localhost:${port}/webhooks/sms`);
-  console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log('\n🎯 This is a simplified demo server. Full TypeScript implementation is being prepared.\n');
-});
+// For local development
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(port, () => {
+    console.log(`🚀 CivicSense API server running on port ${port}`);
+    console.log(`📊 Health check: http://localhost:${port}/health`);
+    console.log(`📱 SMS webhook: POST http://localhost:${port}/webhooks/sms`);
+    console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log('\n🎯 This is a simplified demo server. Full TypeScript implementation is being prepared.\n');
+  });
+}
 
 export default app;
