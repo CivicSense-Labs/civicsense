@@ -3,9 +3,16 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import { createClient } from '@supabase/supabase-js';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -16,13 +23,38 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    message: 'CivicSense API is running!'
-  });
+// Health check endpoint with database connectivity
+app.get('/health', async (req, res) => {
+  try {
+    // Test database connection
+    const { data, error } = await supabase
+      .from('organizations')
+      .select('count', { count: 'exact' });
+
+    const dbStatus = error ? 'disconnected' : 'connected';
+    const dbMessage = error ? error.message : `${data?.length || 0} organizations`;
+
+    res.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      message: 'CivicSense API is running!',
+      database: {
+        status: dbStatus,
+        message: dbMessage
+      },
+      environment: process.env.NODE_ENV || 'development'
+    });
+  } catch (err) {
+    res.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      message: 'CivicSense API is running!',
+      database: {
+        status: 'error',
+        message: err.message
+      }
+    });
+  }
 });
 
 // SMS webhook placeholder
@@ -36,21 +68,110 @@ app.post('/webhooks/sms', (req, res) => {
   `);
 });
 
-// Dashboard placeholder
-app.get('/dashboard/:orgId', (req, res) => {
-  res.json({
-    message: 'Dashboard API placeholder',
-    orgId: req.params.orgId,
-    metrics: {
-      open_parent_tickets: 2,
-      total_open_tickets: 5,
-      merged_tickets: 3,
-      critical_open: 1,
-      avg_sentiment: -0.1
-    },
-    parentTickets: [],
-    recentActivity: []
-  });
+// Dashboard with real data
+app.get('/dashboard/:orgId', async (req, res) => {
+  try {
+    const { orgId } = req.params;
+
+    // Get organization info
+    const { data: org, error: orgError } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('id', orgId)
+      .single();
+
+    if (orgError) {
+      return res.status(404).json({
+        error: 'Organization not found',
+        message: orgError.message
+      });
+    }
+
+    // Get ticket metrics
+    const { data: tickets, error: ticketsError } = await supabase
+      .from('tickets')
+      .select('*')
+      .eq('org_id', orgId);
+
+    const { data: reports, error: reportsError } = await supabase
+      .from('reports')
+      .select('*')
+      .in('ticket_id', tickets?.map(t => t.id) || []);
+
+    // Calculate metrics
+    const openTickets = tickets?.filter(t => t.status === 'open') || [];
+    const parentTickets = tickets?.filter(t => !t.parent_id) || [];
+    const mergedTickets = tickets?.filter(t => t.parent_id) || [];
+    const criticalTickets = tickets?.filter(t => t.priority === 'critical' && t.status === 'open') || [];
+
+    const avgSentiment = tickets?.length > 0
+      ? tickets.reduce((sum, t) => sum + (t.sentiment_score || 0), 0) / tickets.length
+      : 0;
+
+    res.json({
+      organization: org,
+      metrics: {
+        open_parent_tickets: parentTickets.length,
+        total_open_tickets: openTickets.length,
+        merged_tickets: mergedTickets.length,
+        critical_open: criticalTickets.length,
+        avg_sentiment: Number(avgSentiment.toFixed(2)),
+        total_reports: reports?.length || 0
+      },
+      parentTickets: parentTickets.slice(0, 10), // Latest 10
+      recentActivity: [
+        ...tickets?.slice(-5).map(t => ({
+          type: 'ticket_created',
+          timestamp: t.created_at,
+          description: `New ticket: ${t.description?.substring(0, 50)}...`
+        })) || [],
+        ...reports?.slice(-5).map(r => ({
+          type: 'report_received',
+          timestamp: r.created_at,
+          description: `Report via ${r.channel}: ${r.transcript?.substring(0, 50)}...`
+        })) || []
+      ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 10)
+    });
+
+  } catch (err) {
+    console.error('Dashboard error:', err);
+    res.status(500).json({
+      error: 'Failed to load dashboard',
+      message: err.message
+    });
+  }
+});
+
+// List organizations endpoint
+app.get('/organizations', async (req, res) => {
+  try {
+    const { data: organizations, error } = await supabase
+      .from('organizations')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return res.status(500).json({
+        error: 'Failed to fetch organizations',
+        message: error.message
+      });
+    }
+
+    res.json({
+      organizations: organizations || [],
+      count: organizations?.length || 0,
+      message: organizations?.length === 0
+        ? 'No organizations found. Run the database setup script first!'
+        : `Found ${organizations.length} organization(s)`
+    });
+
+  } catch (err) {
+    console.error('Organizations endpoint error:', err);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: err.message
+    });
+  }
 });
 
 // 404 handler

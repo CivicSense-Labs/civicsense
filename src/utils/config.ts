@@ -1,11 +1,9 @@
 import { Config } from '../types/index.js';
 
 export function loadConfig(): Config {
+  // Only require Supabase URL as mandatory for now
   const requiredEnvVars = [
-    'TWILIO_ACCOUNT_SID',
-    'TWILIO_AUTH_TOKEN',
-    'SUPABASE_URL',
-    'SUPABASE_SERVICE_ROLE_KEY'
+    'SUPABASE_URL'
   ];
 
   // Check for required environment variables
@@ -29,11 +27,11 @@ export function loadConfig(): Config {
     },
     supabase: {
       url: process.env.SUPABASE_URL!,
-      anonKey: process.env.SUPABASE_ANON_KEY!,
-      serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY!
+      anonKey: process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || '',
+      serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || ''
     },
     googleMaps: {
-      apiKey: process.env.GOOGLE_MAPS_API_KEY!
+      apiKey: process.env.GOOGLE_MAPS_API_KEY || ''
     },
     app: {
       baseUrl: process.env.BASE_URL || 'http://localhost:3000',
