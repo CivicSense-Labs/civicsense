@@ -1,0 +1,15 @@
+# Ignore TypeScript source files during deployment
+src/**/*.ts
+!src/**/*.js
+
+# Ignore dev files
+dashboard/
+*.md
+.env.local
+.env.example
+
+# Keep only essential files for deployment
+!api/
+!src/simple-server.js
+!package.json
+!vercel.json
