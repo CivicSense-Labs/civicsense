@@ -69,30 +69,42 @@ export async function validateCityBounds(
   cityBoundsGeoJSON: GeoJSON.Polygon
 ): Promise<boolean> {
   try {
-    // Simple point-in-polygon check using ray casting algorithm
-    const point: [number, number] = [lon, lat]; // GeoJSON uses [lon, lat] format
-    const polygon = cityBoundsGeoJSON.coordinates[0]; // First ring (exterior)
+    // Use Turf.js for accurate point-in-polygon check
+    const { default: booleanPointInPolygon } = await import('@turf/boolean-point-in-polygon');
+    const { point, polygon } = await import('@turf/helpers');
 
-    let inside = false;
-    let j = polygon.length - 1;
+    const testPoint = point([lon, lat]); // GeoJSON uses [lon, lat] format
+    const testPolygon = polygon(cityBoundsGeoJSON.coordinates);
 
-    for (let i = 0; i < polygon.length; i++) {
-      const xi = polygon[i][0], yi = polygon[i][1];
-      const xj = polygon[j][0], yj = polygon[j][1];
-
-      if (((yi > point[1]) !== (yj > point[1])) &&
-          (point[0] < (xj - xi) * (point[1] - yi) / (yj - yi) + xi)) {
-        inside = !inside;
-      }
-      j = i;
-    }
-
-    return inside;
+    return booleanPointInPolygon(testPoint, testPolygon);
 
   } catch (error) {
     console.error('City bounds validation error:', error);
-    // Return true on error to avoid blocking legitimate reports
-    return true;
+    // Fallback to simple ray casting if Turf.js fails
+    try {
+      const pointCoords: [number, number] = [lon, lat];
+      const polygonCoords = cityBoundsGeoJSON.coordinates[0]; // First ring (exterior)
+
+      let inside = false;
+      let j = polygonCoords.length - 1;
+
+      for (let i = 0; i < polygonCoords.length; i++) {
+        const xi = polygonCoords[i][0], yi = polygonCoords[i][1];
+        const xj = polygonCoords[j][0], yj = polygonCoords[j][1];
+
+        if (((yi > pointCoords[1]) !== (yj > pointCoords[1])) &&
+            (pointCoords[0] < (xj - xi) * (pointCoords[1] - yi) / (yj - yi) + xi)) {
+          inside = !inside;
+        }
+        j = i;
+      }
+
+      return inside;
+    } catch (fallbackError) {
+      console.error('Fallback validation error:', fallbackError);
+      // Return true on error to avoid blocking legitimate reports
+      return true;
+    }
   }
 }
 

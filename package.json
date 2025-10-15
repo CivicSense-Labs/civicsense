@@ -34,10 +34,9 @@
     "@anthropic-ai/sdk": "^0.17.1",
     "openai": "^4.28.4",
     "zod": "^3.22.4",
-    "crypto": "^1.0.1",
     "axios": "^1.6.7",
-    "turf": "^3.0.14",
-    "@turf/inside": "^6.5.0",
+    "@turf/boolean-point-in-polygon": "^6.5.0",
+    "@turf/helpers": "^6.5.0",
     "dotenv": "^16.4.5"
   },
   "devDependencies": {
