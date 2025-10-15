@@ -12,9 +12,7 @@ const adminSupabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-export const config = {
-  runtime: 'nodejs18.x'
-};
+// File-level runtime config removed; runtime is configured in vercel.json
 
 export default async function handler(req, res) {
   const { method, url } = req;
