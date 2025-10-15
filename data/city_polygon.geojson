@@ -1,0 +1,17 @@
+{
+  "type": "Feature",
+  "properties": {
+    "name": "Newark, NJ",
+    "description": "Simplified boundary polygon for demo purposes"
+  },
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [[
+      [-74.1723, 40.7351],
+      [-74.1723, 40.7751],
+      [-74.1401, 40.7751],
+      [-74.1401, 40.7351],
+      [-74.1723, 40.7351]
+    ]]
+  }
+}
