@@ -27,8 +27,6 @@ enabled = true
 site_url = "http://localhost:3000"
 additional_redirect_urls = ["https://your-vercel-app.vercel.app"]
 jwt_expiry = 3600
-refresh_token_rotation_enabled = true
-security_update_password_required_for_ssr = false
 
 [auth.email]
 enable_signup = false
@@ -37,13 +35,8 @@ enable_confirmations = false
 
 # Edge Functions configuration
 [functions.daily-digest]
-import_map = "./supabase/functions/import_map.json"
-
-[functions.daily-digest.schedule]
-cron = "0 1 * * *"  # Run at 1:00 AM UTC daily
 
 [functions.embed-ticket]
-import_map = "./supabase/functions/import_map.json"
 
 [analytics]
 enabled = false

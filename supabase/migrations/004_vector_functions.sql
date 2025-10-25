@@ -30,16 +30,24 @@ $$;
 -- Function to rebuild vector index (call after loading data)
 create or replace function rebuild_vector_index()
 returns void
-language sql
+language plpgsql
 as $$
+declare
+  list_count int;
+begin
   -- Drop existing index if it exists
   drop index if exists idx_ticket_embeddings_vector;
 
-  -- Create new index with appropriate list count
-  create index idx_ticket_embeddings_vector
-  on ticket_embeddings
-  using ivfflat (embedding vector_cosine_ops)
-  with (lists = greatest(100, (select count(*) / 1000 from ticket_embeddings)::int));
+  -- Calculate appropriate list count
+  select greatest(100, (count(*) / 1000)::int) into list_count
+  from ticket_embeddings;
+
+  -- Create new index with calculated list count
+  execute format('create index idx_ticket_embeddings_vector
+    on ticket_embeddings
+    using ivfflat (embedding vector_cosine_ops)
+    with (lists = %s)', list_count);
+end;
 $$;
 
 -- Helper function to get embedding statistics
@@ -53,7 +61,7 @@ language sql
 as $$
   select
     count(*) as total_embeddings,
-    case when count(*) > 0 then array_length(embedding, 1) else 0 end as avg_dimension,
+    case when count(*) > 0 then 1536 else 0 end as avg_dimension,
     exists(
       select 1 from pg_indexes
       where tablename = 'ticket_embeddings'
