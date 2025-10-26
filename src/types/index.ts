@@ -158,38 +158,3 @@ export interface TicketSummary {
   first_reported_at: string;
   last_reported_at: string;
 }
-
-// Configuration types
-export interface Config {
-  twilio: {
-    accountSid: string;
-    authToken: string;
-    messagingServiceSid: string;
-    verifyServiceSid: string;
-  };
-  llm: {
-    provider: 'openai' | 'anthropic';
-    openaiApiKey?: string;
-    anthropicApiKey?: string;
-  };
-  supabase: {
-    url: string;
-    anonKey: string;
-    serviceRoleKey: string;
-  };
-  googleMaps: {
-    apiKey: string;
-  };
-  app: {
-    baseUrl: string;
-    port: number;
-    environment: string;
-  };
-  agents: {
-    similarityThreshold: number;
-    geoRadiusMeters: number;
-    timeWindowHours: number;
-    urgencyCriticalThreshold: number;
-    sentimentCriticalThreshold: number;
-  };
-}

@@ -1,9 +1,9 @@
-import { createSupabaseClient } from '../services/supabase.js';
+import { adminSupabase } from '../services/supabase';
 import { upsertTicketEmbedding, findSimilarTickets } from '../services/embeddings.js';
 import { calculateSimilarityScore, findDedupCandidates } from '../utils/similarity.js';
 import type { FlowState } from '../types/index.js';
 
-const supabase = createSupabaseClient();
+const supabase = adminSupabase;
 
 interface DedupResult {
   success: boolean;
@@ -37,8 +37,8 @@ export async function dedupAgent(state: FlowState): Promise<DedupResult> {
     await upsertTicketEmbedding(
       ticket.id,
       ticket.description,
-      ticket.category,
-      ticket.cross_street
+      ticket.category ?? undefined,
+      ticket.cross_street ?? undefined
     );
 
     // Find similar tickets using vector search

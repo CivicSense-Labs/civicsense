@@ -1,9 +1,9 @@
 import { Router } from 'express';
-import { createSupabaseClient } from '../services/supabase.js';
-import type { DashboardMetrics, TicketSummary } from '../types/index.js';
+import { adminSupabase } from '../services/supabase';
+import type { DashboardMetrics, TicketSummary } from '../types/index';
 
 const router = Router();
-const supabase = createSupabaseClient();
+const supabase = adminSupabase;
 
 // Get dashboard metrics for an organization
 router.get('/:orgId', async (req, res) => {

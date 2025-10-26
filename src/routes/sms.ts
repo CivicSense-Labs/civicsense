@@ -1,34 +1,34 @@
 import { Router } from 'express';
 import twilio from 'twilio';
-import { createSupabaseClient } from '../services/supabase.js';
-import { hashPhone } from '../utils/crypto.js';
-import { checkRateLimit } from '../utils/rate-limit.js';
+import { adminSupabase } from '../services/supabase';
+import { hashPhone } from '../utils/crypto';
+import { checkRateLimit } from '../utils/rate-limit';
 import { sendOTP } from '../services/twilio.js';
 import { processIntakeWorkflow } from '../agents/workflow.js';
-import { loadConfig } from '../utils/config.js';
+import { getConfig } from '../utils/config';
 import type { SMSWebhookPayload } from '../types/index.js';
 
 const router = Router();
-const config = loadConfig();
-const supabase = createSupabaseClient();
+const config = getConfig();
+const supabase = adminSupabase;
 
 // Twilio webhook signature validation
 const validateTwilioSignature = (req: any, res: any, next: any) => {
   const twilioSignature = req.headers['x-twilio-signature'];
-  const url = `${config.app.baseUrl}${req.originalUrl}`;
+  const url = `${config.BASE_URL}${req.originalUrl}`;
 
   if (!twilioSignature) {
     return res.status(401).json({ error: 'Missing Twilio signature' });
   }
 
   const isValid = twilio.validateRequest(
-    config.twilio.authToken,
+    config.TWILIO_AUTH_TOKEN,
     twilioSignature,
     url,
     req.body
   );
 
-  if (!isValid && config.app.environment === 'production') {
+  if (!isValid && config.NODE_ENV === 'production') {
     return res.status(401).json({ error: 'Invalid Twilio signature' });
   }
 

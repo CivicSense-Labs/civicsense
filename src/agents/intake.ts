@@ -1,23 +1,23 @@
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
-import { createSupabaseClient } from '../services/supabase.js';
-import { loadConfig } from '../utils/config.js';
-import type { FlowState, IntakeData } from '../types/index.js';
+import { adminSupabase  } from '../services/supabase';
+import { getConfig } from '../utils/config';
+import type { FlowState, IntakeData } from '../types/index';
 
-const config = loadConfig();
-const supabase = createSupabaseClient();
+const config = getConfig();
+const supabase = adminSupabase;
 
 // Initialize LLM clients
 let openai: OpenAI | null = null;
 let anthropic: Anthropic | null = null;
 
-if (config.llm.openaiApiKey) {
-  openai = new OpenAI({ apiKey: config.llm.openaiApiKey });
+if (config.OPENAI_API_KEY) {
+  openai = new OpenAI({ apiKey: config.OPENAI_API_KEY });
 }
 
-if (config.llm.anthropicApiKey) {
-  anthropic = new Anthropic({ apiKey: config.llm.anthropicApiKey });
+if (config.ANTHROPIC_API_KEY) {
+  anthropic = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY });
 }
 
 // JSON Schema for intake data validation
@@ -68,7 +68,7 @@ export async function intakeAgent(rawText: string, state: FlowState): Promise<In
         lat: intakeData.lat,
         lon: intakeData.lon,
         status: 'pending_dedup',
-        priority: intakeData.urgency_score && intakeData.urgency_score >= config.agents.urgencyCriticalThreshold
+        priority: intakeData.urgency_score && intakeData.urgency_score >= config.URGENCY_CRITICAL_THRESHOLD
           ? 'critical'
           : 'normal'
       })
@@ -121,9 +121,9 @@ export async function intakeAgent(rawText: string, state: FlowState): Promise<In
  */
 async function extractStructuredData(rawText: string): Promise<{ success: boolean; data?: IntakeData; error?: string }> {
   try {
-    if (config.llm.provider === 'anthropic' && anthropic) {
+    if (config.LLM_PROVIDER === 'anthropic' && anthropic) {
       return await extractWithAnthropic(rawText);
-    } else if (config.llm.provider === 'openai' && openai) {
+    } else if (config.LLM_PROVIDER === 'openai' && openai) {
       return await extractWithOpenAI(rawText);
     } else {
       throw new Error('No LLM provider configured');

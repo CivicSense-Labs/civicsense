@@ -1,16 +1,16 @@
 import { Router } from 'express';
 import twilio from 'twilio';
-import { createSupabaseClient } from '../services/supabase.js';
-import { hashPhone } from '../utils/crypto.js';
-import { checkRateLimit } from '../utils/rate-limit.js';
-import { transcribeAudio } from '../services/transcription.js';
-import { processIntakeWorkflow } from '../agents/workflow.js';
-import { loadConfig } from '../utils/config.js';
+import { adminSupabase } from '../services/supabase';
+import { hashPhone } from '../utils/crypto';
+import { checkRateLimit } from '../utils/rate-limit';
+import { transcribeAudio } from '../services/transcription';
+import { processIntakeWorkflow } from '../agents/workflow';
+import { getConfig } from '../utils/config';
 import type { VoiceWebhookPayload } from '../types/index.js';
 
 const router = Router();
-const config = loadConfig();
-const supabase = createSupabaseClient();
+const config = getConfig();
+const supabase = adminSupabase;
 
 // Initial voice call webhook
 router.post('/voice', async (req, res) => {

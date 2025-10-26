@@ -1,11 +1,11 @@
 import { Router } from 'express';
-import { createSupabaseClient } from '../services/supabase.js';
-import { hashPhone } from '../utils/crypto.js';
-import { verifyOTP } from '../services/twilio.js';
-import type { VerifyCheckPayload } from '../types/index.js';
+import { adminSupabase } from '../services/supabase';
+import { hashPhone } from '../utils/crypto';
+import { verifyOTP } from '../services/twilio';
+import type { VerifyCheckPayload } from '../types/index';
 
 const router = Router();
-const supabase = createSupabaseClient();
+const supabase = adminSupabase;
 
 router.post('/check', async (req, res) => {
   try {

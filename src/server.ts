@@ -2,23 +2,23 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
-import { smsRouter } from './routes/sms.js';
-import { voiceRouter } from './routes/voice.js';
-import { verifyRouter } from './routes/verify.js';
-import { dashboardRouter } from './routes/dashboard.js';
-import { loadConfig } from './utils/config.js';
+import { smsRouter } from './routes/sms';
+import { voiceRouter } from './routes/voice';
+import { verifyRouter } from './routes/verify';
+import { dashboardRouter } from './routes/dashboard';
+import { getConfig } from './utils/config';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
 
 const app = express();
-const config = loadConfig();
+const config = getConfig();
 
 // Middleware
 app.use(helmet());
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
-    ? [config.app.baseUrl]
+    ? [config.BASE_URL]
     : ['http://localhost:3000', 'http://localhost:8501'], // Include Streamlit port
   credentials: true
 }));
@@ -32,7 +32,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    environment: config.app.environment
+    environment: config.NODE_ENV
   });
 });
 
@@ -60,11 +60,11 @@ app.use((req, res) => {
 });
 
 // Start server
-const port = config.app.port;
+const port = config.PORT;
 app.listen(port, () => {
   console.log(`🚀 CivicSense API server running on port ${port}`);
-  console.log(`📊 Dashboard available at ${config.app.baseUrl}/dashboard`);
-  console.log(`🔧 Environment: ${config.app.environment}`);
+  console.log(`📊 Dashboard available at ${config.BASE_URL}/dashboard`);
+  console.log(`🔧 Environment: ${config.NODE_ENV}`);
 });
 
 export default app;

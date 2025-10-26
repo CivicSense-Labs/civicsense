@@ -1,23 +1,23 @@
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
-import { createSupabaseClient } from './supabase.js';
-import { loadConfig } from '../utils/config.js';
-import { createEmbeddingText, cosineSimilarity } from '../utils/similarity.js';
-import type { TicketEmbedding } from '../types/index.js';
+import { adminSupabase } from './supabase';
+import { getConfig } from '../utils/config';
+import { createEmbeddingText, cosineSimilarity } from '../utils/similarity';
+import type { TicketEmbedding } from '../types/index';
 
-const config = loadConfig();
-const supabase = createSupabaseClient();
+const config = getConfig();
+const supabase = adminSupabase;
 
 // Initialize LLM clients
 let openai: OpenAI | null = null;
 let anthropic: Anthropic | null = null;
 
-if (config.llm.openaiApiKey) {
-  openai = new OpenAI({ apiKey: config.llm.openaiApiKey });
+if (config.OPENAI_API_KEY) {
+  openai = new OpenAI({ apiKey: config.OPENAI_API_KEY });
 }
 
-if (config.llm.anthropicApiKey) {
-  anthropic = new Anthropic({ apiKey: config.llm.anthropicApiKey });
+if (config.ANTHROPIC_API_KEY) {
+  anthropic = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY });
 }
 
 /**

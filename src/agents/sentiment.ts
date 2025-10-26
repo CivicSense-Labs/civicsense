@@ -1,22 +1,22 @@
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
-import { createSupabaseClient } from '../services/supabase.js';
-import { loadConfig } from '../utils/config.js';
-import type { FlowState, SentimentResult } from '../types/index.js';
+import { adminSupabase } from '../services/supabase';
+import { getConfig } from '../utils/config';
+import type { FlowState, SentimentResult } from '../types/index';
 
-const config = loadConfig();
-const supabase = createSupabaseClient();
+const config = getConfig();
+const supabase = adminSupabase;
 
 // Initialize LLM clients
 let openai: OpenAI | null = null;
 let anthropic: Anthropic | null = null;
 
-if (config.llm.openaiApiKey) {
-  openai = new OpenAI({ apiKey: config.llm.openaiApiKey });
+if (config.OPENAI_API_KEY) {
+  openai = new OpenAI({ apiKey: config.OPENAI_API_KEY });
 }
 
-if (config.llm.anthropicApiKey) {
-  anthropic = new Anthropic({ apiKey: config.llm.anthropicApiKey });
+if (config.ANTHROPIC_API_KEY) {
+  anthropic = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY });
 }
 
 interface SentimentAnalysisResult {
@@ -58,7 +58,7 @@ export async function sentimentAgent(state: FlowState): Promise<SentimentAnalysi
         .eq('id', state.ticketId);
 
       // Update priority if sentiment is very negative
-      if (sentimentResult.sentiment.score <= config.agents.sentimentCriticalThreshold) {
+      if (sentimentResult.sentiment.score <= config.SENTIMENT_CRITICAL_THRESHOLD) {
         await supabase
           .from('tickets')
           .update({ priority: 'critical' })
@@ -89,9 +89,9 @@ export async function sentimentAgent(state: FlowState): Promise<SentimentAnalysi
  */
 async function analyzeSentiment(text: string): Promise<SentimentAnalysisResult> {
   try {
-    if (config.llm.provider === 'anthropic' && anthropic) {
+    if (config.LLM_PROVIDER === 'anthropic' && anthropic) {
       return await analyzeWithAnthropic(text);
-    } else if (config.llm.provider === 'openai' && openai) {
+    } else if (config.LLM_PROVIDER === 'openai' && openai) {
       return await analyzeWithOpenAI(text);
     } else {
       throw new Error('No LLM provider configured');
