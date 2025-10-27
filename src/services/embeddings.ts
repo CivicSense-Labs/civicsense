@@ -1,29 +1,61 @@
 import OpenAI from 'openai';
-import Anthropic from '@anthropic-ai/sdk';
 import { adminSupabase } from './supabase';
 import { getConfig } from '../utils/config';
 import { createEmbeddingText, cosineSimilarity } from '../utils/similarity';
-import type { TicketEmbedding } from '../types/index';
 
 const config = getConfig();
 const supabase = adminSupabase;
 
-// Initialize LLM clients
+// Vector conversion helpers.
+const vectorToString = (vector: number[]): string => JSON.stringify(vector);
+
+const stringToVector = (str: string | null): number[] => {
+    if (!str) throw new Error('Invalid embedding data');
+    try {
+      const vector = JSON.parse(str) as number[];
+      if (!Array.isArray(vector) || vector.length !== 1536) {
+        throw new Error('Invalid vector format or dimensions');
+      }
+      return vector;
+    } catch (error) {
+      throw new Error('Failed to parse embedding vector');
+    }
+};
+
+interface EmbeddingResult {
+  success: boolean;
+  embedding?: number[];
+  error?: string;
+}
+
+interface SimilaritySearchResult {
+  success: boolean;
+  similarities?: SimilarityMatch[];
+  error?: string;
+}
+
+interface SimilarityMatch {
+  ticket_id: string;
+  similarity: number;
+  ticket_data?: any;
+}
+
+interface UpsertResult {
+  success: boolean;
+  error?: string;
+}
+
+// Initialize LLM client
 let openai: OpenAI | null = null;
-let anthropic: Anthropic | null = null;
 
 if (config.OPENAI_API_KEY) {
   openai = new OpenAI({ apiKey: config.OPENAI_API_KEY });
 }
 
-if (config.ANTHROPIC_API_KEY) {
-  anthropic = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY });
-}
-
 /**
  * Generate embeddings using OpenAI's text-embedding-ada-002 model
  */
-export async function generateEmbedding(text: string): Promise<{ success: boolean; embedding?: number[]; error?: string }> {
+export async function generateEmbedding(text: string): Promise<EmbeddingResult> {
   try {
     if (!openai) {
       throw new Error('OpenAI client not initialized');
@@ -56,7 +88,7 @@ export async function upsertTicketEmbedding(
   description: string,
   category?: string,
   crossStreet?: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<UpsertResult> {
   try {
     // Create embedding text
     const embeddingText = createEmbeddingText(description, category, crossStreet);
@@ -72,7 +104,7 @@ export async function upsertTicketEmbedding(
       .from('ticket_embeddings')
       .upsert({
         ticket_id: ticketId,
-        embedding: embeddingResult.embedding
+        embedding: vectorToString(embeddingResult.embedding!)
       }, {
         onConflict: 'ticket_id'
       });
@@ -100,15 +132,7 @@ export async function findSimilarTickets(
   ticketId: string,
   threshold: number = 0.7,
   limit: number = 10
-): Promise<{
-  success: boolean;
-  similarities?: Array<{
-    ticket_id: string;
-    similarity: number;
-    ticket_data?: any;
-  }>;
-  error?: string;
-}> {
+): Promise<SimilaritySearchResult> {
   try {
     // Get the embedding for the target ticket
     const { data: targetEmbedding, error: embeddingError } = await supabase
@@ -117,36 +141,35 @@ export async function findSimilarTickets(
       .eq('ticket_id', ticketId)
       .single();
 
-    if (embeddingError || !targetEmbedding) {
-      throw new Error('Target ticket embedding not found');
-    }
+  if (embeddingError || !targetEmbedding) {
+    throw new Error('Target ticket embedding not found');
+  }
 
-    // Use Supabase's vector similarity search if available
-    if (supabase.sql) {
-      const { data: similarities, error: searchError } = await supabase.rpc(
-        'find_similar_tickets',
-        {
-          target_embedding: targetEmbedding.embedding,
-          similarity_threshold: threshold,
-          match_limit: limit,
-          exclude_ticket_id: ticketId
-        }
-      );
-
-      if (searchError) {
-        console.error('Vector search error:', searchError);
-        // Fall back to manual similarity calculation
-      } else if (similarities) {
-        return {
-          success: true,
-          similarities: similarities.map((s: any) => ({
-            ticket_id: s.ticket_id,
-            similarity: s.similarity,
-            ticket_data: s.ticket_data
-          }))
-        };
+  // Try RPC function first (faster if available)
+  try {
+    const { data: similarities, error: searchError } = await supabase.rpc(
+      'find_similar_tickets',
+      {
+        target_embedding: vectorToString(stringToVector(targetEmbedding.embedding)),
+        similarity_threshold: threshold,
+        match_limit: limit,
+        exclude_ticket_id: ticketId
       }
+    );
+
+    if (!searchError && similarities) {
+      return {
+        success: true,
+        similarities: similarities.map((s: any) => ({
+          ticket_id: s.ticket_id,
+          similarity: s.similarity,
+          ticket_data: s.ticket_data
+        }))
+      };
     }
+  } catch (rpcError) {
+    console.log('RPC function not available, falling back to manual calculation');
+  }
 
     // Fallback: Manual similarity calculation
     const { data: allEmbeddings, error: allError } = await supabase
@@ -174,20 +197,32 @@ export async function findSimilarTickets(
     }
 
     const similarities = [];
-    const targetVector = targetEmbedding.embedding;
+    let targetVector: number[];
+    try {
+      targetVector = stringToVector(targetEmbedding.embedding);
+    } catch (conversionError) {
+      throw new Error('Invalid target embedding format');
+    }
 
     for (const embedding of allEmbeddings || []) {
       // Skip child tickets (only compare with potential parents)
       if (embedding.tickets.parent_id) continue;
 
-      const similarity = cosineSimilarity(targetVector, embedding.embedding);
+      try {
+        // Convert and calculate - both operations can fail
+        const embeddingVector = stringToVector(embedding.embedding);
+        const similarity = cosineSimilarity(targetVector, embeddingVector);
 
-      if (similarity >= threshold) {
-        similarities.push({
-          ticket_id: embedding.ticket_id,
-          similarity,
-          ticket_data: embedding.tickets
-        });
+        if (similarity >= threshold) {
+          similarities.push({
+            ticket_id: embedding.ticket_id,
+            similarity,
+            ticket_data: embedding.tickets
+          });
+        }
+      } catch (conversionError) {
+        console.warn(`Skipping embedding for ticket ${embedding.ticket_id}: invalid format`);
+        continue;
       }
     }
 
@@ -213,42 +248,6 @@ export async function findSimilarTickets(
  * This should be called during database setup
  */
 export async function createSimilaritySearchFunction(): Promise<void> {
-  const sqlFunction = `
-    create or replace function find_similar_tickets(
-      target_embedding vector(1536),
-      similarity_threshold float default 0.7,
-      match_limit int default 10,
-      exclude_ticket_id uuid default null
-    )
-    returns table (
-      ticket_id uuid,
-      similarity float,
-      ticket_data json
-    )
-    language sql
-    as $$
-      select
-        te.ticket_id,
-        1 - (te.embedding <=> target_embedding) as similarity,
-        to_json(t.*) as ticket_data
-      from ticket_embeddings te
-      join tickets t on t.id = te.ticket_id
-      where
-        t.status = 'open'
-        and t.parent_id is null
-        and (exclude_ticket_id is null or te.ticket_id != exclude_ticket_id)
-        and 1 - (te.embedding <=> target_embedding) >= similarity_threshold
-      order by te.embedding <=> target_embedding
-      limit match_limit;
-    $$;
-  `;
-
-  try {
-    const { error } = await supabase.rpc('exec_sql', { sql: sqlFunction });
-    if (error) {
-      console.error('Function creation error:', error);
-    }
-  } catch (error) {
-    console.error('Failed to create similarity search function:', error);
-  }
+  console.log('find_similar_tickets RPC function should be created via database migrations');
+  // Function already exists in migrations - no dynamic creation needed
 }

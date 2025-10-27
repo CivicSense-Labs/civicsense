@@ -1,20 +1,26 @@
 import OpenAI from 'openai';
 import axios from 'axios';
-import { loadConfig } from '../utils/config.js';
+import { getConfig } from '../utils/config';
 
-const config = loadConfig();
+const config = getConfig();
+
+interface TranscriptionResult {
+  success: boolean;
+  text?: string;
+  error?: string;
+}
 
 /**
  * Transcribe audio from a URL using OpenAI Whisper API
  */
-export async function transcribeAudio(audioUrl: string): Promise<{ success: boolean; text?: string; error?: string }> {
+export async function transcribeAudio(audioUrl: string): Promise<TranscriptionResult> {
   try {
-    if (!config.llm.openaiApiKey) {
+    if (!config.OPENAI_API_KEY) {
       throw new Error('OpenAI API key not configured for transcription');
     }
 
     const openai = new OpenAI({
-      apiKey: config.llm.openaiApiKey
+      apiKey: config.OPENAI_API_KEY
     });
 
     // Download audio file
@@ -53,7 +59,7 @@ export async function transcribeAudio(audioUrl: string): Promise<{ success: bool
  * Alternative transcription using Anthropic Claude for text processing
  * (if we need to process already transcribed text)
  */
-export async function enhanceTranscription(rawText: string): Promise<{ success: boolean; text?: string; error?: string }> {
+export async function enhanceTranscription(rawText: string): Promise<TranscriptionResult> {
   try {
     // This could be used to clean up or enhance transcribed text
     // For now, just return the original text
