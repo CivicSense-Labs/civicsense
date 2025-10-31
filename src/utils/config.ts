@@ -38,7 +38,9 @@ const EnvSchema = z.object( {
     process.env.NODE_ENV === 'production'
       ? 'https://your-app.vercel.app'
       : 'http://localhost:3000'
-  ),
+    ),
+
+    MAX_REPORTS_PER_DAY: z.coerce.number().default(5),
 
 });
 

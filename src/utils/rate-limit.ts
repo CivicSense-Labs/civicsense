@@ -1,97 +1,70 @@
-import { createSupabaseClient } from '../services/supabase.js';
-import { loadConfig } from './config.js';
-import type { RateLimitInfo } from '../types/index.js';
+import { adminSupabase } from '../services/supabase';
+import { getConfig } from '../utils/config';
+import type { RateLimitInfo } from '../types/index';
 
-const supabase = createSupabaseClient();
-const config = loadConfig();
+const supabase = adminSupabase;
+const config = getConfig();
+
+const getTomorrowISO = (): string => 
+  new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
 /**
  * Check and update rate limiting for a phone hash
  */
 export async function checkRateLimit(phoneHash: string): Promise<RateLimitInfo> {
-  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-  const maxReports = parseInt(process.env.MAX_REPORTS_PER_DAY || '5');
+  const today = new Date().toISOString().split('T')[0];
+  const maxReports = config.MAX_REPORTS_PER_DAY || 5;
 
   try {
-    // Get or create rate limit entry for today
-    const { data: rateLimitEntry, error: fetchError } = await supabase
+    // Get current count first - maybeSingle() returns null if no record exists (safe for first-time users)
+    const { data: existing } = await supabase
       .from('rate_limiter')
-      .select('*')
+      .select('count')
       .eq('phone_hash', phoneHash)
       .eq('day', today)
-      .single();
+      .maybeSingle();
 
-    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = no rows returned
-      console.error('Rate limit fetch error:', fetchError);
-      throw fetchError;
-    }
+    const currentCount = (existing?.count || 0) + 1;
 
-    let currentCount = 0;
-
-    if (rateLimitEntry) {
-      currentCount = rateLimitEntry.count;
-    }
-
-    // Check if limit exceeded
-    if (currentCount >= maxReports) {
+    // Check limit before updating
+    if (currentCount > maxReports) {
       return {
         allowed: false,
-        count: currentCount,
+        count: currentCount - 1,
         limit: maxReports,
-        reset_time: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // Tomorrow
+        reset_time: getTomorrowISO()
       };
     }
 
-    // Increment counter
-    const newCount = currentCount + 1;
-
-    if (rateLimitEntry) {
-      // Update existing entry
-      const { error: updateError } = await supabase
-        .from('rate_limiter')
-        .update({ count: newCount })
-        .eq('phone_hash', phoneHash)
-        .eq('day', today);
-
-      if (updateError) {
-        console.error('Rate limit update error:', updateError);
-        throw updateError;
-      }
-    } else {
-      // Create new entry
-      const { error: insertError } = await supabase
-        .from('rate_limiter')
-        .insert({
-          phone_hash: phoneHash,
-          day: today,
-          count: newCount
-        });
-
-      if (insertError) {
-        console.error('Rate limit insert error:', insertError);
-        throw insertError;
-      }
-    }
+    // UPSERT with correct count
+    await supabase
+      .from('rate_limiter')
+      .upsert({
+        phone_hash: phoneHash,
+        day: today,
+        count: currentCount
+      }, {
+        onConflict: 'phone_hash,day'
+      });
 
     return {
       allowed: true,
-      count: newCount,
+      count: currentCount,
       limit: maxReports,
-      reset_time: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      reset_time: getTomorrowISO()
     };
 
   } catch (error) {
     console.error('Rate limiting error:', error);
-    // Allow request on error to avoid blocking legitimate users
+    // Fail open - allow request to avoid blocking legitimate users
     return {
       allowed: true,
       count: 0,
       limit: maxReports,
-      reset_time: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      reset_time: getTomorrowISO()
     };
   }
 }
-
 /**
  * Reset rate limiting for a specific phone hash (admin function)
  */
