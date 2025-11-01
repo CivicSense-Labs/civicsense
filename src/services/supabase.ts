@@ -1,29 +1,19 @@
-import { createClient } from '@supabase/supabase-js';
-import { loadConfig } from '../utils/config.js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { getConfig } from '../utils/config';
+import type { Database } from '../types/supabase';
 
-let supabaseClient: ReturnType<typeof createClient> | null = null;
+const cfg = getConfig();
 
-export function createSupabaseClient() {
-  if (!supabaseClient) {
-    const config = loadConfig();
-    supabaseClient = createClient(
-      config.supabase.url,
-      config.supabase.serviceRoleKey,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    );
-  }
-  return supabaseClient;
-}
+// Public (anon) client — use for RLS-protected reads where appropriate.
+export const supabase: SupabaseClient<Database> = createClient<Database>(
+  cfg.SUPABASE_URL,
+  cfg.SUPABASE_ANON_KEY,
+  { auth: { persistSession: false } }
+);
 
-export function createSupabaseAnonClient() {
-  const config = loadConfig();
-  return createClient(
-    config.supabase.url,
-    config.supabase.anonKey
-  );
-}
+// Admin (service-role) client — server-only tasks (inserts/merges/embeddings).
+export const adminSupabase: SupabaseClient<Database> = createClient<Database>(
+  cfg.SUPABASE_URL,
+  cfg.SUPABASE_SERVICE_ROLE_KEY,
+  { auth: { persistSession: false } }
+);

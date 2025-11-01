@@ -1,22 +1,22 @@
 import axios from 'axios';
-import { loadConfig } from './config.js';
-import type { GeocodingResult } from '../types/index.js';
+import { getConfig } from '../utils/config';
+import type { GeocodingResult } from '../types/index';
 
-const config = loadConfig();
+const config = getConfig();
 
 /**
  * Geocode an address or cross-street using Google Maps API
  */
 export async function geocodeAddress(address: string): Promise<{ success: boolean; result?: GeocodingResult; error?: string }> {
   try {
-    if (!config.googleMaps.apiKey) {
+    if (!config.GOOGLE_MAPS_API_KEY) {
       throw new Error('Google Maps API key not configured');
     }
 
     const url = 'https://maps.googleapis.com/maps/api/geocode/json';
     const params = {
       address,
-      key: config.googleMaps.apiKey,
+      key: config.GOOGLE_MAPS_API_KEY,
       region: 'us', // Bias towards US results
       language: 'en'
     };

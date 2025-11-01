@@ -1,8 +1,8 @@
-import { calculateDistance } from './geocoding.js';
-import { loadConfig } from './config.js';
-import type { SimilarityResult } from '../types/index.js';
+import { calculateDistance } from './geocoding';
+import { getConfig } from './config';
+import type { SimilarityResult } from '../types/index';
 
-const config = loadConfig();
+const config = getConfig();
 
 /**
  * Calculate similarity score for deduplication decisions
@@ -14,9 +14,9 @@ export function calculateSimilarityScore(
 ): SimilarityResult {
   // Geo factor: closer = higher score
   let geoFactor: number;
-  if (geoDistanceMeters < config.agents.geoRadiusMeters) {
+  if (geoDistanceMeters < config.GEO_RADIUS_METERS) {
     geoFactor = 1.0;
-  } else if (geoDistanceMeters < config.agents.geoRadiusMeters * 2) {
+  } else if (geoDistanceMeters < config.GEO_RADIUS_METERS * 2) {
     geoFactor = 0.8;
   } else {
     geoFactor = 0.4;
@@ -26,7 +26,7 @@ export function calculateSimilarityScore(
   let timeFactor: number;
   if (timeDifferenceHours < 24) {
     timeFactor = 1.0;
-  } else if (timeDifferenceHours < config.agents.timeWindowHours) {
+  } else if (timeDifferenceHours < config.TIME_WINDOW_HOURS) {
     timeFactor = 0.8;
   } else {
     timeFactor = 0.5;
@@ -35,10 +35,13 @@ export function calculateSimilarityScore(
   // Combined score (weighted)
   const finalScore = 0.7 * textSimilarity + 0.3 * (geoFactor + timeFactor) / 2;
 
+  // Calculate borderline threshold as 10% below the similarity threshold
+  const borderlineThreshold = Math.max(0.6, config.SIMILARITY_THRESHOLD - 0.1);
+
   return {
     score: finalScore,
-    duplicate: finalScore >= config.agents.similarityThreshold,
-    borderline: finalScore >= 0.75 && finalScore < config.agents.similarityThreshold
+    duplicate: finalScore >= config.SIMILARITY_THRESHOLD,
+    borderline: finalScore >= borderlineThreshold && finalScore < config.SIMILARITY_THRESHOLD
   };
 }
 
@@ -136,14 +139,14 @@ export function findDedupCandidates(
     );
 
     // Skip if too far away
-    if (distance > config.agents.geoRadiusMeters * 2) continue;
+    if (distance > config.GEO_RADIUS_METERS * 2) continue;
 
     // Calculate time difference
     const existingTime = new Date(ticket.created_at).getTime();
     const timeDiffHours = (ticketTime - existingTime) / (1000 * 60 * 60);
 
     // Skip if too old
-    if (timeDiffHours > config.agents.timeWindowHours) continue;
+    if (timeDiffHours > config.TIME_WINDOW_HOURS) continue;
 
     candidates.push({
       id: ticket.id,

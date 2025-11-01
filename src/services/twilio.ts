@@ -1,8 +1,8 @@
 import twilio from 'twilio';
-import { loadConfig } from '../utils/config.js';
+import { getConfig } from '../utils/config';
 
-const config = loadConfig();
-const client = twilio(config.twilio.accountSid, config.twilio.authToken);
+const config = getConfig();
+const client = twilio(config.TWILIO_ACCOUNT_SID, config.TWILIO_AUTH_TOKEN);
 
 /**
  * Send OTP verification code via Twilio Verify
@@ -10,7 +10,7 @@ const client = twilio(config.twilio.accountSid, config.twilio.authToken);
 export async function sendOTP(phoneNumber: string): Promise<{ success: boolean; error?: string }> {
   try {
     await client.verify.v2
-      .services(config.twilio.verifyServiceSid)
+      .services(config.TWILIO_VERIFY_SERVICE_SID)
       .verifications
       .create({ to: phoneNumber, channel: 'sms' });
 
@@ -30,7 +30,7 @@ export async function sendOTP(phoneNumber: string): Promise<{ success: boolean; 
 export async function verifyOTP(phoneNumber: string, code: string): Promise<{ success: boolean; error?: string }> {
   try {
     const verification = await client.verify.v2
-      .services(config.twilio.verifyServiceSid)
+      .services(config.TWILIO_VERIFY_SERVICE_SID)
       .verificationChecks
       .create({ to: phoneNumber, code });
 
@@ -57,7 +57,7 @@ export async function sendSMS(
     const message = await client.messages.create({
       to,
       body,
-      messagingServiceSid: config.twilio.messagingServiceSid
+      messagingServiceSid: config.TWILIO_MESSAGING_SERVICE_SID
     });
 
     return {

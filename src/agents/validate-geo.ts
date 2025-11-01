@@ -1,9 +1,9 @@
-import { createSupabaseClient } from '../services/supabase.js';
-import { enhancedGeocode, validateCityBounds } from '../utils/geocoding.js';
-import type { FlowState } from '../types/index.js';
+import { adminSupabase } from '../services/supabase';
+import { enhancedGeocode, validateCityBounds } from '../utils/geocoding';
+import type { FlowState } from '../types/index';
+import type { Polygon } from 'geojson';
 
-const supabase = createSupabaseClient();
-
+const supabase = adminSupabase;
 interface GeoValidationResult {
   success: boolean;
   error?: string;
@@ -44,7 +44,7 @@ export async function validateGeoAgent(state: FlowState): Promise<GeoValidationR
         const { data: org } = await supabase
           .from('organizations')
           .select('area_bounds')
-          .eq('id', ticket.org_id)
+          .eq('id', ticket.org_id ?? 'default_org_id')
           .single();
 
         // Validate city bounds if organization has them
@@ -53,7 +53,7 @@ export async function validateGeoAgent(state: FlowState): Promise<GeoValidationR
           withinBounds = await validateCityBounds(
             geoResult.result.lat,
             geoResult.result.lon,
-            org.area_bounds
+            org.area_bounds as unknown as Polygon
           );
         }
 

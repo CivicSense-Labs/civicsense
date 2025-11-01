@@ -1,7 +1,7 @@
-import { createSupabaseClient } from '../services/supabase.js';
-import type { FlowState } from '../types/index.js';
+import { adminSupabase } from '../services/supabase';
+import type { FlowState } from '../types/index';
 
-const supabase = createSupabaseClient();
+const supabase = adminSupabase;
 
 interface MergeResult {
   success: boolean;

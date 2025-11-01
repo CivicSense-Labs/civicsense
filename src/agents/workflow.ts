@@ -1,13 +1,13 @@
-import { createSupabaseClient } from '../services/supabase.js';
-import { intakeAgent } from './intake.js';
-import { validateGeoAgent } from './validate-geo.js';
-import { dedupAgent } from './dedup.js';
-import { mergeAgent } from './merge.js';
-import { notifyAgent } from './notify.js';
-import { sentimentAgent } from './sentiment.js';
-import type { FlowState } from '../types/index.js';
+import { adminSupabase } from '../services/supabase';
+import { intakeAgent } from './intake';
+import { validateGeoAgent } from './validate-geo';
+import { dedupAgent } from './dedup';
+import { mergeAgent } from './merge';
+import { notifyAgent } from './notify';
+import { sentimentAgent } from './sentiment';
+import type { FlowState } from '../types/index';
 
-const supabase = createSupabaseClient();
+const supabase = adminSupabase;
 
 interface WorkflowInput {
   userId: string;
@@ -16,7 +16,7 @@ interface WorkflowInput {
   channel: 'sms' | 'voice';
 }
 
-interface WorkflowResult {
+export interface WorkflowResult {
   success: boolean;
   ticketId?: string;
   error?: string;
@@ -196,10 +196,10 @@ export async function reprocessFailedTickets(): Promise<{ processed: number; fai
 
         // Retry the workflow
         const result = await processIntakeWorkflow({
-          userId: report.user_id,
-          orgId: ticket.org_id,
+          userId: report.user_id ?? '',
+          orgId: ticket.org_id ?? '',
           rawText: report.transcript,
-          channel: report.channel
+          channel: report.channel as 'sms' | 'voice'
         });
 
         if (result.success) {
@@ -208,7 +208,7 @@ export async function reprocessFailedTickets(): Promise<{ processed: number; fai
           await supabase
             .from('workflow_events')
             .update({ processed: true })
-            .eq('ticket_id', event.ticket_id)
+            .eq('ticket_id', event.ticket_id as string)
             .eq('event_type', 'workflow.failed');
         } else {
           failed++;

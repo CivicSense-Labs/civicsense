@@ -1,8 +1,8 @@
-import { createSupabaseClient } from '../services/supabase.js';
-import { sendSMS } from '../services/twilio.js';
-import type { FlowState } from '../types/index.js';
+import { adminSupabase } from '../services/supabase';
+import { sendSMS } from '../services/twilio';
+import type { FlowState } from '../types/index';
 
-const supabase = createSupabaseClient();
+const supabase = adminSupabase;
 
 interface NotifyOptions {
   merged: boolean;
@@ -121,8 +121,8 @@ export async function sendDailyDigest(orgId: string): Promise<{ sent: number; fa
     for (const user of usersWithTickets || []) {
       try {
         const openTickets = user.reports
-          .map(r => r.tickets)
-          .filter(t => t.status === 'open');
+          .map((r: any) => r.tickets)
+          .filter((t: any) => t.status === 'open');
 
         if (openTickets.length === 0) continue;
 
