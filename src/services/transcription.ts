@@ -98,5 +98,5 @@ interface TranscriptionResult {
         error: error instanceof Error ? error.message : 'Transcription failed'
       };
     }
-  }
+}
 

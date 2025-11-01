@@ -16,7 +16,7 @@ interface WorkflowInput {
   channel: 'sms' | 'voice';
 }
 
-interface WorkflowResult {
+export interface WorkflowResult {
   success: boolean;
   ticketId?: string;
   error?: string;

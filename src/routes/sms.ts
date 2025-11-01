@@ -1,25 +1,30 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import twilio from 'twilio';
 import { adminSupabase } from '../services/supabase';
 import { hashPhone } from '../utils/crypto';
 import { checkRateLimit } from '../utils/rate-limit';
-import { sendOTP } from '../services/twilio.js';
-import { processIntakeWorkflow } from '../agents/workflow.js';
+import { sendOTP } from '../services/twilio';
+import { processIntakeWorkflow } from '../agents/workflow';
 import { getConfig } from '../utils/config';
-import type { SMSWebhookPayload } from '../types/index.js';
+import type { SMSWebhookPayload } from '../types/index';
+import { createMessagingResponse } from '../utils/twiloHelper';
 
 const router = Router();
 const config = getConfig();
-const supabase = adminSupabase;
 
 // Twilio webhook signature validation
-const validateTwilioSignature = (req: any, res: any, next: any) => {
-  const twilioSignature = req.headers['x-twilio-signature'];
+const validateTwilioSignature = (req: Request, res: Response, next: NextFunction) => {
+  const twilioSignatureHeader = req.headers['x-twilio-signature'];
   const url = `${config.BASE_URL}${req.originalUrl}`;
 
-  if (!twilioSignature) {
-    return res.status(401).json({ error: 'Missing Twilio signature' });
+  if (!twilioSignatureHeader) {
+    const twiml = createMessagingResponse();
+    twiml.message('Unauthorized request');
+    return res.status(401).type('text/xml').send(twiml.toString());
   }
+
+  // Handle case where header might be an array (get first value)
+  const twilioSignature = Array.isArray(twilioSignatureHeader) ? twilioSignatureHeader[0] : twilioSignatureHeader;
 
   const isValid = twilio.validateRequest(
     config.TWILIO_AUTH_TOKEN,
@@ -29,15 +34,33 @@ const validateTwilioSignature = (req: any, res: any, next: any) => {
   );
 
   if (!isValid && config.NODE_ENV === 'production') {
-    return res.status(401).json({ error: 'Invalid Twilio signature' });
+    const twiml = createMessagingResponse();
+    twiml.message('Unauthorized request.');
+    return res.status(401).type('text/xml').send(twiml.toString());
   }
 
-  next();
+  return next();
 };
 
-router.post('/sms', validateTwilioSignature, async (req, res) => {
+router.post('/', validateTwilioSignature, async (req: Request, res: Response) => {
   try {
     const { From, Body, MessageSid }: SMSWebhookPayload = req.body;
+
+    // Log incoming SMS for debugging
+    console.log(`SMS received - MessageSid: ${MessageSid}, From: ${From?.slice(-4)}, Length: ${Body?.length || 0}`);
+
+    if (!From) {
+      const twiml = createMessagingResponse();
+      twiml.message('Missing phone number.');
+      return res.type('text/xml').send(twiml.toString());
+    }
+
+    // Validate message body
+    if (!Body || Body.trim().length === 0) {
+      const twiml = createMessagingResponse();
+      twiml.message('Please send a message describing the issue you want to report.');
+      return res.type('text/xml').send(twiml.toString());
+    }
 
     // Normalize and hash phone number
     const phoneHash = hashPhone(From);
@@ -45,13 +68,13 @@ router.post('/sms', validateTwilioSignature, async (req, res) => {
     // Check rate limiting
     const rateLimitResult = await checkRateLimit(phoneHash);
     if (!rateLimitResult.allowed) {
-      const twiml = new twilio.twiml.MessagingResponse();
+      const twiml = createMessagingResponse();
       twiml.message(`You've reached the daily limit of ${rateLimitResult.limit} reports. Try again tomorrow.`);
       return res.type('text/xml').send(twiml.toString());
     }
 
     // Upsert user
-    const { data: user, error: userError } = await supabase
+    const { data: user, error: userError } = await adminSupabase
       .from('users')
       .upsert({
         phone_hash: phoneHash,
@@ -62,9 +85,9 @@ router.post('/sms', validateTwilioSignature, async (req, res) => {
       .select()
       .single();
 
-    if (userError) {
+    if (userError || !user) {
       console.error('User upsert error:', userError);
-      throw userError;
+      throw userError ?? new Error('User upsert failed');
     }
 
     // Check if user is verified
@@ -72,24 +95,29 @@ router.post('/sms', validateTwilioSignature, async (req, res) => {
       // Send OTP
       const otpResult = await sendOTP(From);
       if (!otpResult.success) {
-        throw new Error('Failed to send OTP');
+        const twiml = createMessagingResponse();
+        console.error('Failed to send OTP:', otpResult.error);
+        twiml.message('We could not send a verification code. Please try again later.');
+        return res.type('text/xml').send(twiml.toString());
       }
 
-      const twiml = new twilio.twiml.MessagingResponse();
+      const twiml = createMessagingResponse();
       twiml.message('Please verify your phone number. Enter the 6-digit code we just sent you.');
       return res.type('text/xml').send(twiml.toString());
     }
 
     // Get organization (assuming single org for demo, expand for multi-org)
-    const { data: org, error: orgError } = await supabase
+    const { data: org, error: orgError } = await adminSupabase
       .from('organizations')
       .select('id')
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (orgError || !org) {
+      const twiml = createMessagingResponse();
       console.error('Organization fetch error:', orgError);
-      throw new Error('No organization configured');
+      twiml.message('No organization configured. Please contact support.');
+      return res.type('text/xml').send(twiml.toString());
     }
 
     // Process the report through the agent workflow
@@ -101,11 +129,11 @@ router.post('/sms', validateTwilioSignature, async (req, res) => {
     });
 
     // Send confirmation response
-    const twiml = new twilio.twiml.MessagingResponse();
-    if (workflowResult.success) {
+    const twiml = createMessagingResponse();
+    if (workflowResult?.success) {
       twiml.message(`Thanks! Processing your report... you'll get a ticket # shortly.`);
     } else {
-      twiml.message(`We couldn't process your report: ${workflowResult.error}. Please try again with more details.`);
+      twiml.message(`We couldn't process your report: ${workflowResult?.error || 'Unknown error'}. Please try again with more details.`);
     }
 
     res.type('text/xml').send(twiml.toString());
@@ -113,7 +141,7 @@ router.post('/sms', validateTwilioSignature, async (req, res) => {
   } catch (error) {
     console.error('SMS webhook error:', error);
 
-    const twiml = new twilio.twiml.MessagingResponse();
+    const twiml = createMessagingResponse();
     twiml.message('Sorry, we encountered an error processing your report. Please try again later.');
     res.type('text/xml').send(twiml.toString());
   }

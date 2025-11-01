@@ -10,6 +10,9 @@ build/
 .next/
 out/
 
+# docs
+docs/
+
 # Environment variables
 .env
 .env.local
